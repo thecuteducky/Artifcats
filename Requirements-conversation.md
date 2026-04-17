@@ -1,6 +1,6 @@
 # Requirements Conversation Cheat Sheet
 <img width="1409" height="65" alt="image" src="https://github.com/user-attachments/assets/c22fce4e-84ea-4dde-8c0a-a13bfeeee51e" />
-<img width="1807" height="841" alt="image" src="https://github.com/user-attachments/assets/646d6730-8c95-4216-8581-24789e0346b1" />
+
 
 ## 1. Stakeholders
 - Who uses the system directly?
