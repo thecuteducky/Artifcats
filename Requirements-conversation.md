@@ -1,5 +1,6 @@
 # Requirements Conversation Cheat Sheet
 <img width="1409" height="65" alt="image" src="https://github.com/user-attachments/assets/c22fce4e-84ea-4dde-8c0a-a13bfeeee51e" />
+<img width="1808" height="779" alt="image" src="https://github.com/user-attachments/assets/f9247e74-c539-4da1-88ee-80503bec9529" />
 
 
 ## 1. Stakeholders
