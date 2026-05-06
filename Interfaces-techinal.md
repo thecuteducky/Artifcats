@@ -1,3 +1,4 @@
+<img width="1536" height="1024" alt="image" src="https://github.com/user-attachments/assets/86bcbaa5-33c9-49ec-84b5-4c9287c88f7f" />
 
 # 🧪 Feature Specification: Lab Booking & Cancellation (Contamination Control)
 
@@ -249,5 +250,139 @@ System refuses with:
 * `status = "refused"`
 * `reason = "cannot cancel past booking"`
 
+
+
+
+
+* ✅ Happy path 
+* 📊 Category column
+* 🧠 One **tautological test**
+* 🔁 One **oracle mirroring implementation**
+* 🚫 One **oracle-free assertion**
+
+---
+
+# 🧪 Test Design: Lab Booking & Cancellation System
+
+| Test ID | Category                    | Scenario                                  | Input                                                            | Oracle Type       | Expected Result                                 |
+| ------- | --------------------------- | ----------------------------------------- | ---------------------------------------------------------------- | ----------------- | ----------------------------------------------- |
+| T1      | Happy Path (Boundary Gap)   | Booking with exact 15-minute cleaning gap | assistant, lab open, previous ends 10:00, new starts 10:15–11:00 | Spec-based oracle | `"booked"`                                      |
+| T2      | Conflict Failure            | Overlapping booking attempt               | previous 10:00–11:00, new 10:30–11:30                            | Rule oracle       | `"refused"`, `"conflict with existing booking"` |
+| T3      | Unauthorized Access         | Student tries to book                     | requester_role = student                                         | Rule oracle       | `"refused"`, `"not authorized"`                 |
+| T4      | Cancellation Invalid Timing | Cancel after start time                   | current_time = 10:05, start_time = 10:00                         | Rule oracle       | `"refused"`, `"cannot cancel past booking"`     |
+
+---
+
+# 🔥 Required Special Test Types
+
+## 1️⃣ 🟢 Happy Path ONLY GAP (Boundary Case)
+
+### ✔ Test
+
+T1 – Booking exactly at 15-minute cleaning gap
+
+### Why it matters
+
+This ensures the system correctly handles the **critical contamination boundary rule**:
+
+> 15 minutes = allowed
+> 14:59 = refused
+
+### Expected behavior
+
+```text
+status = "booked"
+```
+
+---
+
+## 2️⃣ 🧠 Tautological Test (⚠️ Weak but required)
+
+This test *mirrors the system output without meaningful checking*.
+
+### ✔ Test
+
+T1 rewritten as tautological assertion:
+
+```text
+assert system.book(...) == system.book(...)
+```
+
+OR in API form:
+
+```text
+assert response.status == response.status
+```
+
+### Why it is tautological
+
+* It does NOT validate correctness
+* It only compares output to itself
+* It would always pass even if system is broken
+
+👉 This demonstrates a **bad oracle design on purpose**
+
+---
+
+## 3️⃣ 🔁 Oracle Mirroring Implementation Test
+
+This uses a **second implementation identical to the system logic**.
+
+### ✔ Idea
+
+We re-run the same booking logic in a “reference function”:
+
+```text
+expected = bookingService.book(lab_id, time_slot, requester_role, current_time)
+actual = system.book(...)
+assert actual == expected
+```
+
+### Why this is special
+
+* Oracle is **not independent**
+* It mirrors the implementation logic
+* It detects regressions but not logic errors shared by both
+
+---
+
+## 4️⃣ 🚫 Oracle-Free Assertion (Property-Based)
+
+Instead of checking exact outputs, we check a **system invariant**.
+
+### ✔ Test (after any successful booking)
+
+```text
+ASSERT:
+for every booking in system:
+    no overlap exists AND
+    gap between consecutive bookings >= 15 minutes
+```
+
+### Why this is oracle-free
+
+* No expected value is defined
+* It checks a **global property of the system state**
+* Works even if we don’t know exact outputs
+
+### Example assertion
+
+```text
+assert all(
+    gap(b1.end, b2.start) >= 15
+    for all consecutive bookings
+)
+```
+
+---
+
+# 🧠 Summary of What You Demonstrated
+
+| Type                    | What it proves                     |
+| ----------------------- | ---------------------------------- |
+| Happy Path (15-min gap) | Correct boundary handling          |
+| Tautological Test       | Demonstrates weak/invalid testing  |
+| Oracle Mirroring        | Shows dependency on implementation |
+| Oracle-Free Assertion   | Strong system invariant validation |
 
 
