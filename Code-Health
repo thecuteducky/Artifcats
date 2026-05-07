@@ -1,0 +1,162 @@
+# Assignment S10 – Code Health Scorecard
+
+## Code Smells Found in `process_booking()`
+
+* Unclear variable names (`x`, `tmp`, `b`)
+* Multiple responsibilities in one function:
+
+  * validation
+  * authorization
+  * business rules
+  * database access
+* Hard-coded database dependency (`sqlite3.connect("bookings.db")`)
+* No exception handling for database failures
+* Magic number (`10 minutes`)
+* No logging or comments explaining rationale
+* Direct dictionary access may cause runtime errors (`b["start"]`, `b["id"]`)
+* Difficult to unit test because database is tightly coupled
+* Repeated return structure (`{"ok": False, "msg": ...}`)
+* Function mixes domain logic and persistence logic
+
+---
+
+## Code Health Scorecard
+
+| # | Dimension                   | Score (1-5) | One-sentence justification                                                                                                                                     | Proposed Fix                                                                                                      | Effort |
+| - | --------------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------ |
+| 1 | **Modularity (CORE)**       | 2/5         | The function combines validation, authorization, business rules, and database updates, so changing one concern forces maintainers to re-read unrelated logic.  | Split validation logic and database operations into separate helper functions/services.                           | M      |
+| 2 | **Analysability (CORE)**    | 2/5         | Poor variable names and missing rationale make the behavior difficult to understand quickly, increasing onboarding and debugging time for the next maintainer. | Rename variables (`current_time`, `start_time`, `booking`) and add comments/docstrings explaining business rules. | S      |
+| 3 | **Testability (CORE)**      | 1/5         | The hard-coded SQLite dependency prevents isolated unit testing and forces tests to rely on a real database.                                                   | Introduce dependency injection for the database connection or repository layer.                                   | M      |
+| 4 | **Modifiability (STRETCH)** | 2/5         | Adding new booking rules would require editing a long procedural function, increasing the risk of breaking existing behavior.                                  | Extract booking rules into reusable validation methods or a rules engine.                                         | M      |
+| 5 | **Reusability (STRETCH)**   | 1/5         | The booking logic is tightly coupled to SQLite and a specific booking structure, limiting reuse in other systems or APIs.                                      | Create a reusable booking service interface independent of database technology.                                   | L      |
+
+---
+
+# Top-Fix Rationale (ADR Style)
+
+**Context:**
+The current `process_booking()` function tightly couples business rules with direct SQLite database access, making the code difficult to test, maintain, and extend. Every test currently depends on a real database connection, slowing development and increasing the chance of fragile tests.
+
+**Decision:**
+The highest-leverage fix is introducing dependency injection for the database layer by separating persistence logic from booking validation and cancellation rules.
+
+**Consequences:**
+This change makes unit testing significantly easier because validation logic can be tested independently from the database. Future maintainers will be able to swap SQLite for another storage system without rewriting business rules. The tradeoff is slightly increased architectural complexity because an additional repository/service abstraction must be introduced, but the gain in maintainability and testability outweighs the added structure.
+
+---
+
+# Improved Version of the Code
+
+```python
+# bookings/rules.py
+
+from datetime import datetime, timedelta
+
+
+CANCELLATION_LIMIT_MINUTES = 10
+
+
+def validate_booking(booking):
+    current_time = datetime.now()
+
+    if not booking.get("user"):
+        return {"ok": False, "msg": "no user"}
+
+    if booking.get("status") == "cancelled":
+        return {"ok": False, "msg": "already cancelled"}
+
+    if booking.get("owner") != booking.get("user"):
+        return {"ok": False, "msg": "not your booking"}
+
+    start_time = datetime.fromisoformat(booking["start"])
+
+    if current_time + timedelta(minutes=CANCELLATION_LIMIT_MINUTES) >= start_time:
+        return {"ok": False, "msg": "too late"}
+
+    return {"ok": True}
+
+
+def cancel_booking(booking, db_connection):
+    validation = validate_booking(booking)
+
+    if not validation["ok"]:
+        return validation
+
+    cursor = db_connection.cursor()
+
+    cursor.execute(
+        "UPDATE bookings SET status=? WHERE id=?",
+        ("cancelled", booking["id"])
+    )
+
+    db_connection.commit()
+
+    return {"ok": True, "msg": "cancelled"}
+```
+
+---
+
+# Architecture Improvement Diagram
+
+```text
++-------------------+
+|   process request |
++-------------------+
+          |
+          v
++-------------------+
+| validate_booking  |
+| - user checks     |
+| - ownership       |
+| - time rules      |
++-------------------+
+          |
+          v
++-------------------+
+| cancel_booking    |
+| - database update |
++-------------------+
+          |
+          v
++-------------------+
+| Database Layer    |
++-------------------+
+```
+
+---
+
+# Suggested Artifact Folder Structure
+
+```text
+artifacts/
+└── s10/
+    ├── scorecard.md
+    ├── improved_code.py
+    └── architecture_diagram.png
+
+```text
+ BEFORE
+ ┌─────────────────────┐
+ │ process_booking()   │
+ │ validation          │
+ │ authorization       │
+ │ business rules      │
+ │ database access     │
+ └─────────────────────┘
+
+
+ AFTER
+ ┌─────────────────────┐
+ │ validate_booking()  │
+ └─────────────────────┘
+            |
+            v
+ ┌─────────────────────┐
+ │ cancel_booking()    │
+ └─────────────────────┘
+            |
+            v
+ ┌─────────────────────┐
+ │ database layer      │
+ └─────────────────────┘
+```
